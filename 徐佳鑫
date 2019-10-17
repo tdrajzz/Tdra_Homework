@@ -1,0 +1,154 @@
+#include<bits/stdc++.h>
+#define ll long long
+using namespace std;
+
+const int maxn = 1e5+7;
+
+int n,m,a[maxn];
+
+///树链剖分的板子
+struct star{      //首先，我们把依赖与被依赖的关系转化为边存起来
+    int v,next;
+}edge[maxn<<1];int cnt,head[maxn];
+inline void add(int u,int v){
+    edge[cnt].v=v;edge[cnt].next=head[u];head[u]=cnt++;
+    edge[cnt].v=u;edge[cnt].next=head[v];head[v]=cnt++;
+}
+
+int f[maxn],sz[maxn],dep[maxn],son[maxn];//f数组存储当前节点的父节点，sz数组表示以当前节点为根的子树大小，dep数组表示节点深度，son数组表示节点的重儿子
+void dfs(int u,int fa){
+    int maxa=0;sz[u]=1;      //sz初始为1，也就是仅包含自身
+    for(int i=head[u];~i;i=edge[i].next){    //遍历所有子节点
+        int v=edge[i].v;if(v==fa)continue;
+        f[v]=u;dep[v]=dep[u]+1;
+        dfs(v,u);sz[u]+=sz[v];
+        if(sz[v]>maxa)maxa=sz[v],son[u]=v;     //不断修改重儿子，保证为子树最大的子节点
+    }
+}
+int b[maxn],in[maxn],top[maxn];       //b数组存储当前编号对应的节点，in数组表示当前节点的编号，top数组表示当前节点所处链的链头
+void dfs(int u,int fa,int topf){
+    b[++cnt]=u;in[u]=cnt;top[u]=topf;
+    if(!son[u])return;
+    dfs(son[u],u,topf);     //与重儿子相连的边为重边，所以链头不变
+    for(int i=head[u];~i;i=edge[i].next){
+        int v=edge[i].v;if(v==fa||v==son[u])continue;
+        dfs(v,u,v);     //与其他儿子所连的边为轻边，所以链头变为轻儿子
+    }
+}
+
+///线段树维护
+#define lson (rt<<1)
+#define rson (lson|1)
+struct node{
+    int l,r,lazy;
+    ll sum;
+    int mid(){return (l+r)/2;}
+}tree[maxn<<2];
+
+void pushup(int rt){
+    tree[rt].sum = tree[lson].sum+tree[rson].sum;
+    if(tree[lson].lazy==1&&tree[rson].lazy==1){
+        tree[rt].lazy = 1;
+    }
+}
+
+void build(int l,int r,int rt){
+    tree[rt].l=l;
+    tree[rt].r=r;
+    tree[rt].lazy = 0;
+    tree[rt].sum = 0;
+    if(l==r){
+        tree[rt].sum = a[b[l]];///此时线段树的节点是新的节点！！
+        if(tree[rt].sum==0||tree[rt].sum==1)tree[rt].lazy=1;
+        return;
+    }
+    int m = tree[rt].mid();
+    build(l,m,lson);
+    build(m+1,r,rson);
+    pushup(rt);
+}
+
+void pushdown(int l,int r,int rt){
+    if(tree[rt].lazy==1)return;
+    if(tree[rt].l==tree[rt].r){
+        //cout<<"@@@@@@@@@@@"<<tree[rt].l<<' '<<tree[rt].r<<' '<<tree[rt].sum<<endl;
+        tree[rt].sum = (int)(sqrt(tree[rt].sum));
+        if(tree[rt].sum==0||tree[rt].sum==1)tree[rt].lazy=1;
+        return;
+    }
+    int m = tree[rt].mid();
+    pushdown(l,m,lson);
+    pushdown(m+1,r,rson);
+    pushup(rt);
+}
+
+void update(int l,int r,int rt){
+    if(tree[rt].l==l&&tree[rt].r==r){
+        pushdown(l,r,rt);
+        return;
+    }
+    int m = tree[rt].mid();
+    if(r<=m)update(l,r,lson);
+    else if(l>m)update(l,r,rson);
+    else{
+        update(l,m,lson);
+        update(m+1,r,rson);
+    }
+    pushup(rt);
+}
+
+ll query(int l,int r,int rt){
+    if(tree[rt].l==l&&tree[rt].r==r){
+        return tree[rt].sum;
+    }
+    int m =tree[rt].mid();
+    if(r<=m)return query(l,r,lson);
+    else if(l>m)return query(l,r,rson);
+    else return query(l,m,lson)+query(m+1,r,rson);
+}
+
+///操作
+void solve1(){
+    ll sum = 0;
+    int x,y;scanf("%d%d",&x,&y);
+    while(top[x]!=top[y]){
+		if(dep[top[x]]<dep[top[y]])swap(x,y);
+		sum+=query(in[top[x]],in[x],1);
+		x=f[top[x]];
+	}
+	if(dep[x]>dep[y])swap(x,y);
+	sum+=query(in[x],in[y],1);
+	printf("%lld\n",sum);
+}
+
+void solve2(){
+    int x,y;scanf("%d%d",&x,&y);
+    while(top[x]!=top[y]){
+		if(dep[top[x]]<dep[top[y]])swap(x,y);
+		update(in[top[x]],in[x],1);
+		x=f[top[x]];
+	}
+	if(dep[x]>dep[y])swap(x,y);
+	update(in[x],in[y],1);
+}
+
+int main(){
+    cnt = 0;
+    memset(head,-1,sizeof head);
+    scanf("%d%d",&n,&m);
+    for(int i = 1; i <= n; i++)scanf("%d",&a[i]);
+    for(int i = 2; i <= n; i++){
+        int u,v;scanf("%d%d",&u,&v);
+        add(u,v);
+    }
+    cnt = 0;dep[1]=1;
+    dfs(1,0);dfs(1,0,1);//一定要初始cnt！！！
+    build(1,n,1);
+    while(m--){
+        int op;
+        scanf("%d",&op);
+        if(op==1)solve1();
+        else solve2();
+    }
+    return 0;
+}
